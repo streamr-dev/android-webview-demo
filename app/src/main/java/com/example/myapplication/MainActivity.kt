@@ -1,24 +1,92 @@
 package com.example.myapplication
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import android.webkit.PermissionRequest
 
 class MainActivity : AppCompatActivity() {
+
+    // private val url = "file:///android_asset/test.html"
+    private val url = "https://dbl563prmk8i4.cloudfront.net/participant2.html"
+    private val REQUEST_PERMISSIONS = 1
+    private lateinit var webView: WebView
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val webView: WebView = findViewById(R.id.webView)
+        webView = findViewById(R.id.webView)
         val webSettings = webView.settings
         webSettings.javaScriptEnabled = true
+        webSettings.allowContentAccess = true
+        webSettings.domStorageEnabled = true
 
         // Enable camera and microphone access
         webSettings.mediaPlaybackRequiresUserGesture = false
 
-        webView.webChromeClient = WebChromeClient()
-        webView.loadUrl("https://dbl563prmk8i4.cloudfront.net/watcher.html")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.CAMERA
+                ) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.RECORD_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
+                    REQUEST_PERMISSIONS
+                )
+            } else {
+                // Permissions are already granted
+                //initializeWebView()
+                webView.webChromeClient = object : WebChromeClient() {
+                    override fun onPermissionRequest(request: PermissionRequest) {
+                        request.grant(request.resources)
+                    }
+                }
+                webView.loadUrl(url)
+            }
+        } else {
+            webView.webChromeClient = object : WebChromeClient() {
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    request.grant(request.resources)
+                }
+            }
+            webView.loadUrl(url)
+        }
+
+
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_PERMISSIONS) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, you can inform your WebView or handle the logic accordingly
+                println("DEBUG -> Permission granted.")
+                webView.evaluateJavascript("main()") { result ->
+                    // Handle the JavaScript function's result if needed
+                    println("DEBUG -> ${result}")
+                }
+            } else {
+                println("DEBUG -> Permission denied.")
+                // Permission denied, handle accordingly (e.g., show a message)
+            }
+        }
     }
 }

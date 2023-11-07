@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera and Microphone Access</title>
+</head>
+<body>
+<h1>Camera and Microphone Access</h1>
+<button onclick="startCamera()">Start Camera</button>
+<video id="camera-preview" autoplay></video>
+
+<script>
+        function startCamera() {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(function (stream) {
+                    document.getElementById('camera-preview').srcObject = stream;
+                })
+                .catch(function (error) {
+                    console.error('Error accessing camera and microphone: ' + error);
+                });
+        }
+    </script>
+</body>
+</html>
