@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+
+<meta charset="UTF-8">
+<title>WebCodecs API Streamr Demo</title>
+<style>
+  button {
+    background-color: #555555;
+    border: 2px;
+    border-radius: 2px;
+    color: white;
+    padding: 15px 32px;
+    width: 1280px;
+    text-align: center;
+    display: block;
+    font-size: 16px;
+  }
+</style>
+<script type="text/javascript" src="streamr-client.web.min.js"></script>
+<script type="text/javascript" src="jmuxer.js"></script>
+<!--<button id="record" width=1280 onclick="onButtonClicked()">Record</button>-->
+<video id ="src" autoplay muted width=100% height=720></video>
+<div id="container" style="margin: 0 auto; text-align: center;">
+    <video style="border: 1px solid #333; max-width: 100%;" controls autoplay muted poster="streamr-loader.gif" id="player"></video>
+    <video style="border: 1px solid #333; max-width: 100%;" controls autoplay muted id="player2"></video>
+</div>
+<script>
+    let video = document.getElementById('src');
+    let button = document.getElementById('record');
+    let encodeWorker = null;
+    let stream = null;
+    let videoTrack = null;
+    let audioTrack = null;
+    let jmuxer;
+    let jmuxer2;
+
+    //todo move util functions to utils
+
+    function base64ToArrayBuffer(base64) {
+        const binaryString =  window.atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    function generateUUID() {
+      let uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+      return uuid;
+    }
+    const uuidv4 = generateUUID()
+    //console.log(uuidv4);
+
+    //create uuid on browser load, save it, we'll use it to on sending messages and differentiating
+    //which are ours and which are others
+
+    const client = new StreamrClient({
+      network: {
+        webrtcSendBufferMaxMessageCount: 5000
+    },
+      auth: {
+          privateKey: "13e1f58ff9896f48e9f0ff4a8d6b93d889fedca00c97a18d1f35b06e18b99b3a"
+        },
+        logLevel: 'trace'
+    })
+
+    const { address, privateKey } = StreamrClient.generateEthereumAccount();
+
+    const clientReceiver = new StreamrClient({
+      network: {
+        webrtcSendBufferMaxMessageCount: 5000
+    },
+        auth: {
+            privateKey: privateKey
+          },
+          logLevel: 'trace'
+        })
+
+    async function startRecording() {
+
+      videoTrack = stream.getVideoTracks()[0];
+      audioTrack = stream.getAudioTracks()[0];
+      let trackSettings = videoTrack.getSettings();
+      let trackProcessor = new MediaStreamTrackProcessor(videoTrack);
+      let audioTrackSettings = audioTrack.getSettings();
+      let audioTrackProcessor = new MediaStreamTrackProcessor(audioTrack);
+      let audioFrameStream = audioTrackProcessor.readable;
+      let frameStream = trackProcessor.readable;
+
+      // Encoder I/O and file writing happens in a Worker to keep the UI
+      // responsive.
+      encodeWorker = new Worker('./encode-worker-streamr.js');
+
+      encodeWorker.onmessage = async function(event) {
+        // retrieve base64 chunks from worker thread
+        const message = event.data
+        const encoder = new TextEncoder('utf-8');
+
+        // Encode the string and get the byte length
+        const encodedString = encoder.encode(message);
+
+        const sizeInBytes = encodedString.length;
+        //console.log('payload size in bytes', sizeInBytes)
+
+        try {
+          const response = await client.publish({id: "0x937934175ca694b5f66f4c96b11f25a326b4cc5d/demostream", partition: 1}, message)
+        } catch(error) {
+          console.log(error)
+        }
+
+      }
+
+      // Tell the worker to start encoding the frames and writing the file.
+      // NOTE: transferring frameStream and reading it in the worker is more
+      // efficient than reading frameStream here and transferring VideoFrames
+      // individually. This allows us to entirely avoid processing frames on the
+      // main (UI) thread.
+      encodeWorker.postMessage({
+        type: 'start',
+        fileHandle: null,
+        frameStream: frameStream,
+        trackSettings: trackSettings,
+        audioFrameStream: audioFrameStream,
+        audioTrackSettings: audioTrackSettings,
+        uuid: uuidv4
+      }, [frameStream, audioFrameStream]);
+    }
+
+    function stopRecording() {
+      console.assert(button.innerText == 'Stop');
+      encodeWorker.postMessage({ type: 'stop'});
+      return ;
+    }
+
+    async function onButtonClicked() {
+      switch(button.innerText) {
+        case 'Record':
+          startRecording();
+          break;
+        case 'Stop':
+          stopRecording();
+          break;
+      }
+    };
+
+    async function main() {
+      let constraints = {
+        audio: true,
+        video: {width: 1280, height: 720, frameRate: 30}
+      };
+      stream = await window.navigator.mediaDevices.getUserMedia(constraints);
+      console.log(stream)
+      let video = document.getElementById('src');
+      video.srcObject = stream;
+    }
+
+    function startListening() {
+      jmuxer = new JMuxer({
+        node: 'player',
+        mode: 'video',
+        flushingTime: 0,
+        maxDelay: 500,
+        fps: 30,
+        debug: false,
+        onError: function(data) {
+            if (/Safari/.test(navigator.userAgent) && /Apple Computer/.test(navigator.vendor)) {
+                jmuxer.reset();
+            }
+        },
+        onMissingVideoFrames: function(data) {
+            console.log('missed some frames', data)
+        }
+      });
+
+      jmuxer2 = new JMuxer({
+        node: 'player2',
+        mode: 'audio',
+        flushingTime: 0,
+        maxDelay: 500,
+        fps: 30,
+        debug: false,
+        onError: function(data) {
+            if (/Safari/.test(navigator.userAgent) && /Apple Computer/.test(navigator.vendor)) {
+                jmuxer.reset();
+            }
+        },
+        onMissingVideoFrames: function(data) {
+            console.log('missed some frames', data)
+        }
+      });
+
+      try {
+        clientReceiver.subscribe({id:"0x937934175ca694b5f66f4c96b11f25a326b4cc5d/demostream", partition:2},
+        (content, metadata) => {
+            //check if we received video or audio chunk
+            //pass video chunks to video attr
+            //audio chunks to audio attr
+            if (content.uuid != uuidv4) {
+              const chunkData = base64ToArrayBuffer(content.chunk)
+              if (content.type == 'video') {
+                  jmuxer.feed({
+                      video: new Uint8Array(chunkData)
+                  });
+              }
+              if (content.type == 'audio') {
+                  jmuxer2.feed({
+                      audio: new Uint8Array(chunkData)
+                  });
+              }
+            }
+        });
+    } catch(error) {
+        console.log(error)
+    }
+
+    }
+
+    window.addEventListener('load', async function () {
+      await main()
+      console.log("loaded")
+      startRecording();
+      startListening();
+    })
+
+    //document.body.onload = main;
+</script>
+

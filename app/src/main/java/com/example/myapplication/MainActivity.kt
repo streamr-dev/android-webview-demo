@@ -14,8 +14,13 @@ import android.webkit.PermissionRequest
 
 class MainActivity : AppCompatActivity() {
 
-    // private val url = "file:///android_asset/test.html"
-    private val url = "https://dbl563prmk8i4.cloudfront.net/participant2.html"
+    //private val url = "https://dbl563prmk8i4.cloudfront.net/participant1.html" // streamr 1.0 pre-testnet implementation
+    // on-line demo that uses streamr 1.0, try to open https://dbl563prmk8i4.cloudfront.net/participant2.html to see the counterparty
+
+    // ALTERNATIVELY, replate url address with one below, test out the participant2.html link on browser while app is running
+    // brubeck demo assets, open https://dbl563prmk8i4.cloudfront.net/participant2_movius.html to interact with demo
+    private val url = "file:///android_asset/participant1.html"
+
     private val REQUEST_PERMISSIONS = 1
     private lateinit var webView: WebView
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +32,8 @@ class MainActivity : AppCompatActivity() {
         webSettings.javaScriptEnabled = true
         webSettings.allowContentAccess = true
         webSettings.domStorageEnabled = true
-
+        webSettings.allowFileAccess = true
+        webSettings.allowFileAccessFromFileURLs = true
         // Enable camera and microphone access
         webSettings.mediaPlaybackRequiresUserGesture = false
 
