@@ -5,12 +5,17 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.inputmethod.EditorInfo
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import android.webkit.PermissionRequest
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
 
 class MainActivity : AppCompatActivity() {
 
@@ -23,9 +28,14 @@ class MainActivity : AppCompatActivity() {
 
     private val REQUEST_PERMISSIONS = 1
     private lateinit var webView: WebView
+    private lateinit var inputField: EditText
+    private lateinit var sendButton: Button
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        inputField = findViewById(R.id.inputField)
+        sendButton = findViewById(R.id.button2)
 
         webView = findViewById(R.id.webView)
         val webSettings = webView.settings
@@ -37,6 +47,11 @@ class MainActivity : AppCompatActivity() {
         // Enable camera and microphone access
         webSettings.mediaPlaybackRequiresUserGesture = false
 
+        sendButton.setOnClickListener {
+            val textToSend = inputField.text.toString()
+            webView.evaluateJavascript("javascript:sendMsgToStreamr('$textToSend')", null)
+            inputField.text.clear()
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (ContextCompat.checkSelfPermission(

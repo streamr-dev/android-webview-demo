@@ -18,16 +18,29 @@
 
 <body>
     <div>Hello World!</div>
+    <div id="uuid">My id is: </div>
     <div id="textbox"></div>
 </body>
 <script type="text/javascript" src="streamr-client.web.min.js"></script>
 <script>
+
+    function generateUUID() {
+        let uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+        return uuid;
+    }
+    const uuid = generateUUID()
+
+    document.getElementById("uuid").textContent = "My id is: " + uuid
+
     function addText(content) {
         var textbox = document.getElementById("textbox");
         var newText = document.createElement("p");
         newText.textContent = content;
         textbox.insertBefore(newText, textbox.firstChild)
-        //textbox.appendChild(newText);
         textbox.scrollTop = textbox.scrollHeight;
     }
 
@@ -38,43 +51,20 @@
         logLevel: 'trace'
     })
 
-    async function sendToStreamr() {
-        const message = { id: Math.floor(Math.random() * 1000) }
+    async function sendMsgToStreamr(msg) {
+        const message = { content: msg, sender: uuid }
         const response = await client.publish({ id: "0x937934175ca694b5f66f4c96b11f25a326b4cc5d/demostream", partition: 3 }, message)
+        addText("Me: " + msg)
     }
-
-    setInterval(sendToStreamr, 1000)
 
     const { address, privateKey } = StreamrClient.generateEthereumAccount();
 
-    /*const clientReceiver = new StreamrClient({
-        auth: {
-            privateKey: privateKey
-        },
-        logLevel: 'trace'
-    })*/
-
-    client.subscribe({ id: "0x937934175ca694b5f66f4c96b11f25a326b4cc5d/demostream", partition: 4 },
+    client.subscribe({ id: "0x937934175ca694b5f66f4c96b11f25a326b4cc5d/demostream", partition: 3 },
         (content, metadata) => {
-            //check if we received video or audio chunk
-            //pass video chunks to video attr
-            //audio chunks to audio attr
-            addText(JSON.stringify(content))
+            if (!(content?.sender == uuid)) {
+                addText(content?.sender + ": " + content?.content)
+            }
+
         })
 
-    /*try {
-        clientReceiver.subscribe({ id: "0x937934175ca694b5f66f4c96b11f25a326b4cc5d/demostream", partition: 4 },
-            (content, metadata) => {
-                //check if we received video or audio chunk
-                //pass video chunks to video attr
-                //audio chunks to audio attr
-                addText(content)
-            });
-    } catch (error) {
-        console.log(error)
-    }*/
-
-
-
-    //document.body.onload = main;
 </script>
