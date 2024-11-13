@@ -1,12 +1,7 @@
-// importScripts('./webm-writer2.js')
-// importScripts('./streamr-client.web.min.js')
-
 let webmWriter = null;
 let fileWritableStream = null;
 let frameReader = null;
 let audioFrameReader = null;
-
-let audioEncoderSupported = false
 
 function arrayBufferToBase64(arrayBuffer) {
   // Create a view on the ArrayBuffer
@@ -19,16 +14,6 @@ function arrayBufferToBase64(arrayBuffer) {
   return btoa(binary);
 }
 
-/*function base64ToArrayBuffer(base64) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}*/
-
 //pass audiostream to function
 //create audio encoder aac if possible
 //check if config is supported
@@ -38,52 +23,26 @@ async function startRecording(fileHandle, frameStream, trackSettings, audioFrame
   let frameCounter = 0;
   let audioFrameCounter = 0;
 
-  /*const client = new StreamrClient({
-    auth: {
-        privateKey: "0xa9af751db1197ec8eed7e340d9aac1d2b4878ca9a8df27f08cd6931c845e94a9"
-      },
-      logLevel: 'trace'
-  })*/
-
-  // fileWritableStream = await fileHandle.createWritable();
-
-  /*webmWriter = new WebMWriter({
-      fileWriter: fileWritableStream,
-      codec: 'VP9',
-      width: trackSettings.width,
-      height: trackSettings.height});*/
-
   frameReader = frameStream.getReader();
   audioFrameReader = audioFrameStream.getReader();
 
   const init = {
     output: async (chunk) => {
       let arr_buf = new ArrayBuffer(chunk.byteLength)
-      //console.log('chunk size in bytes', chunk.byteLength)
       chunk.copyTo(arr_buf)
       const base64Chunk = arrayBufferToBase64(arr_buf)
-      //const check = base64ToArrayBuffer(base64Chunk)
       // send chunks from worker to browser thread
 
       if (chunk instanceof EncodedAudioChunk) {
         //postmessage with type of audio or video
         //type: audio
-        self.postMessage({type:'audio', chunk: base64Chunk, uuid: uuid})
+        self.postMessage({ type: 'audio', chunk: base64Chunk, uuid: uuid })
       }
       if (chunk instanceof EncodedVideoChunk) {
         //type: video
         //update player to understand this
-        self.postMessage({type:'video', chunk: base64Chunk, uuid: uuid})
+        self.postMessage({ type: 'video', chunk: base64Chunk, uuid: uuid })
       }
-
-      //self.postMessage(base64Chunk)
-      //const base64String = btoa(String.fromCharCode.apply(null, new Uint8Array(foo)));
-      // const response = await client.publish("0x64a79123bbb4eb016a950d6c91a6c59d14f60c3f/webcodecs", base64Chunk)
-      // console.log(response)
-      //instead of webm writer, send over streamr network
-      //convert to base64, send as is
-      
-      //webmWriter.addFrame(chunk);
     },
     error: (e) => {
       console.log(e.message);
@@ -113,50 +72,41 @@ async function startRecording(fileHandle, frameStream, trackSettings, audioFrame
   console.assert(support.supported);
   encoder.configure(config);
 
-
   let audioEncoder = new AudioEncoder(init);
   let audioSupport = await AudioEncoder.isConfigSupported(audioConfig)
-  try {
-      console.log(audioSupport?.supported)
-      audioEncoder.configure(audioConfig)
-      audioEncoderSupported = true
-  } catch(error) {
-    console.log(error)
-  }
-  
+  console.assert(audioSupport.supported)
+  audioEncoder.configure(audioConfig)
 
-  //let audioEncoder = new AudioEncode
-  if (audioEncoderSupported) {
-      audioFrameReader.read().then(async function processAudioFrame({done,value}){
-        let audioFrame = value;
 
-        if(done) {
-          await audioEncoder.flush()
-          audioEncoder.close()
-          return;
-        }
-        audioEncoder.encode(audioFrame)
+  audioFrameReader.read().then(async function processAudioFrame({ done, value }) {
+    let audioFrame = value;
 
-        if(audioEncoder.encodeQueueSize <= 30) {
-          if (++audioFrameCounter % 1000 == 0) {
-            console.log(audioFrameCounter + ' audio frames processed')
-          }
+    if (done) {
+      await audioEncoder.flush()
+      audioEncoder.close()
+      return;
+    }
+    audioEncoder.encode(audioFrame)
 
-          const insert_keyframe = (audioFrameCounter % 15) == 0;
+    if (audioEncoder.encodeQueueSize <= 30) {
+      if (++audioFrameCounter % 1000 == 0) {
+        console.log(audioFrameCounter + ' audio frames processed')
+      }
 
-        } else {
-          console.log('dropping audio frame, encoder falling behind')
-        }
+      const insert_keyframe = (audioFrameCounter % 15) == 0;
 
-        audioFrame.close()
-        audioFrameReader.read().then(processAudioFrame)
-      })
-  }
+    } else {
+      console.log('dropping audio frame, encoder falling behind')
+    }
 
-  frameReader.read().then(async function processFrame({done, value}) {
+    audioFrame.close()
+    audioFrameReader.read().then(processAudioFrame)
+  })
+
+  frameReader.read().then(async function processFrame({ done, value }) {
     let frame = value;
 
-    if(done) {
+    if (done) {
       await encoder.flush();
       encoder.close();
       return;
@@ -180,18 +130,15 @@ async function startRecording(fileHandle, frameStream, trackSettings, audioFrame
 
 async function stopRecording() {
   await frameReader.cancel();
-  // await webmWriter.complete();
-  // fileWritableStream.close();
   frameReader = null;
   webmWriter = null;
-  // fileWritableStream = null;
 }
 
-self.addEventListener('message', function(e) {
+self.addEventListener('message', function (e) {
   switch (e.data.type) {
     case "start":
       startRecording(e.data.fileHandle, e.data.frameStream,
-                          e.data.trackSettings, e.data.audioFrameStream, e.data.audioTrackSettings, e.data.uuid);
+        e.data.trackSettings, e.data.audioFrameStream, e.data.audioTrackSettings, e.data.uuid);
       break;
     case "stop":
       stopRecording();
